@@ -1,71 +1,70 @@
-# Creating a New OpenClaw Skill for GitHub App
+# Creating a New OpenClaw Skill for GitHub Actions
 
-This tutorial walks through creating a custom skill that uses the GitHub App to perform actions (e.g., create an issue).
+## Overview
+This tutorial will guide you through creating a new skill that uses your GitHub App to perform actions like creating issues in repositories.
 
-## Skill Layout
+## Prerequisites
+- A GitHub organization with a registered GitHub App.
+- Basic familiarity with shell scripting and YAML configuration.
 
+## Step 1: Directory Layout
+Create the following directory structure:
 ```
-my-skill/
-├── skill.yaml
-├── scripts/
-│   └── create_issue.sh
-└── README.md
+skills/
+└── my-github-skill/
+    ├── skill.yaml
+    └── create_issue.sh
 ```
 
-## skill.yaml Essentials
-
+## Step 2: skill.yaml Essentials
+Define your skill's metadata in `skill.yaml`:
 ```yaml
-name: github-create-issue
-description: Create a GitHub issue using the installed GitHub App
-version: 0.1.0
-agent: openclaw
-entrypoint: scripts/create_issue.sh
-parameters:
-  - name: repo
-    type: string
-    description: Repository name (e.g., ncs-ai/my-repo)
-  - name: title
-    type: string
-    description: Issue title
-  - name: body
-    type: string
-    description: Issue body
+name: "My GitHub Skill"
+description: "Creates issues using the GitHub App JWT helper."
+author: "Your Name <your@email.com>"
+version: "0.1.0"
+entrypoint: create_issue.sh
+dependencies:
+  - github-app-jwt-helper
 ```
 
-## Example Script (bash)
-
+## Step 3: Script Example (create_issue.sh)
 ```bash
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
 
-# Load helper to get installation token
-TOKEN=$(./github_jwt.sh "$CLIENT_ID" "$PEM" | {
-  JWT=$(cat)
-  INSTALL_ID=$(curl -s -H "Authorization: Bearer $JWT" https://api.github.com/app/installations | python3 -c "import json,sys; print([i['id'] for i in json.load(sys.stdin) if i.get('account',{}).get('login')=='$ORG'][0])")
-  curl -s -X POST -H "Authorization: Bearer $JWT" https://api.github.com/app/installations/$INSTALL_ID/access_tokens | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])"
-})
+# Load OpenClaw environment variables
+source /path/to/openclaw/env
 
-REPO="{{repo}}"
-TITLE="{{title}}"
-BODY="{{body}}"
+# Ensure we're using GitHub App auth
+AUTH_TYPE="github-app"
+APP_ID="<your-github-app-id>"
+INSTALLATION_ID="<installation-id>"
 
-curl -X POST "https://api.github.com/repos/$REPO/issues" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Accept: application/vnd.github+json" \
-  -d "$(jq -n --arg t "$TITLE" --arg b "$BODY" '{title:$t, body:$b}')"
+# Function to create an issue via the GitHub API
+create_issue() {
+  local repo=$1
+  local title=$2
+  local body=$3
+
+  curl -X POST "https://api.github.com/repos/$repo/issues" \
+    -H "Authorization: Bearer $(jwt_helper get_token)" \
+    -d "{\"title\":\"$title\",\"body\":\"$body\"}"
+}
+
+# Example usage
+create_issue "org/repo" "Test Issue" "This is an automated issue."
 ```
 
-## Testing Locally
+## Step 4: Test Locally
+1. Make sure the `github-app-jwt-helper` dependency is installed in your OpenClaw environment.
+2. Run:
+   ```bash
+   openclaw run skill.yaml create_issue.sh org/repo "Test Issue" "Body of the issue."
+   ```
 
-1. Ensure `github_jwt.sh` and the app PEM are available in the agent workspace.
-2. Export `CLIENT_ID`, `PEM`, `ORG` environment variables.
-3. Run: `./scripts/create_issue.sh --repo ncs-ai/gh-agents --title "Test" --body "Hello"`
+## Step 5: Package and Use
+1. Archive your skill directory as a tarball.
+2. Deploy to your environment or organization's OpenClaw instance.
 
-## Packaging & Use
-
-- Commit the skill folder under `skills/` in your agent repo.
-- In your agent’s `openclaw.json`, add the skill to the agent’s allowed skills or global skills.
-- The agent can now invoke the skill by name.
-
----
-_Last updated: 2026-03-26 by Spark_
+## Next Steps
+Explore additional GitHub App capabilities in the OpenClaw documentation for more advanced automation.
